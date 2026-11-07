@@ -156,6 +156,19 @@ Setup must succeed before polling or work starts. Overview lists missing require
    List personal CLIs, such as one signed in to your own account, as blocked commands.
 4. **Prompts.** Set the team sections: the GitHub disclosure line, review bots, the commit author and the auto-merge condition.
 
+### Auto-merge CLI
+
+`scripts/gh-agent-pr-merge` is the only way an agent may turn auto-merge on or off. It is a small wrapper around `gh pr merge` with a fixed contract:
+
+```sh
+scripts/gh-agent-pr-merge pr merge <number> --auto --merge --match-head-commit <sha> --repo <owner/name>
+scripts/gh-agent-pr-merge pr merge <number> --disable-auto --repo <owner/name>
+```
+
+The enable form runs `gh pr merge <number> --auto --merge --match-head-commit <sha> --repo <repo>` and passes the head commit through unchanged, so GitHub itself voids the auto-merge if the branch moves. The disable form runs `gh pr merge <number> --disable-auto --repo <repo>`. `gh` comes from `GH_AGENT_PR_MERGE_GH` when set and from `PATH` otherwise, so an existing `GH_CONFIG_DIR` still chooses the account; the CLI adds no credentials and forwards `gh`'s exit code and both streams. `--help` prints the contract.
+
+A person must approve the test results first. The CLI only enables auto-merge: it never approves a pull request, never merges directly, and refuses `--admin`, so it cannot bypass branch protection. It checks every argument before it calls `gh` and refuses any other subcommand, a `<number>` that is not a positive integer, a missing or malformed `--repo`, an enable form without `--merge` and a 40-hex `--match-head-commit`, a disable form with either of them, and unknown options. A later milestone points the `executor.mergeCli` setting at it; until then, call it from the Delivery requirements instructions.
+
 ### Management API
 
 The panel uses a local HTTP API that agents can also call. `SETUP.md` uses it to save settings, and the service script reads `GET state`.

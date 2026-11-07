@@ -6,6 +6,7 @@ import { EvalConfigSchema, ExecutorConfigSchema, PolicyConfigSchema, SettingsSch
 import type { Settings as SettingsValue, SettingsBlock, SettingsOrigin, SettingsSave } from '../policy.ts'
 import type { SourceHost } from '../sources/host.ts'
 import type { HealthBoard, HealthEntry } from '../infra/health.ts'
+import type { FeatureRegistry } from '../features/registry.ts'
 import type { SourceRegistry } from '../sources/registry.ts'
 import { resolveRoleModel } from './role-models.ts'
 import { changedPaths, settingsNotice } from './notices.ts'
@@ -25,11 +26,11 @@ const environment = ({ executor }: SettingsValue) => JSON.stringify([executor.di
 
 /** Schema parser, settings merger, and non-panel origin guard for one settings block kind. */
 interface Block {
-  parse(value: unknown, sources: SourceRegistry, id: string): unknown
+  parse(value: unknown, sources: SourceRegistry, id: string, features: FeatureRegistry): unknown
   merge(settings: SettingsValue, value: unknown, id: string): SettingsValue
   guard?(current: SettingsValue, candidate: SettingsValue, origin: SettingsOrigin): void
 }
-const BLOCKS: Record<'policy' | 'eval' | 'executor' | 'source', Block> = {
+const BLOCKS: Record<'policy' | 'eval' | 'executor' | 'source' | 'feature', Block> = {
   policy: {
     parse: (value, sources) => {
       const policy = PolicyConfigSchema.parse(value)
@@ -50,12 +51,20 @@ const BLOCKS: Record<'policy' | 'eval' | 'executor' | 'source', Block> = {
     // Only the management panel may switch source accounts.
     guard: (current, candidate, origin) => { if (origin !== 'panel' && setupChanged(current, candidate)) throw new UserError('panelOnlyAccounts') },
   },
+  feature: {
+    parse: (value, _sources, id, features) => features.validate(id, z.object({ enabled: z.boolean(), config: z.unknown() }).parse(value)),
+    merge: (settings, value, id) => ({ ...settings, features: { ...settings.features, [id]: value as SettingsValue['features'][string] } }),
+    // Only the management panel may change a Feature's roles, stages, and release chain.
+    guard: (current, candidate, origin) => { if (origin !== 'panel' && JSON.stringify(current.features) !== JSON.stringify(candidate.features)) throw new UserError('panelOnlyAccounts') },
+  },
 }
 
 /** Host dependencies used by `Settings`. */
 export interface SettingsHost {
   readonly store: Pick<Store, 'settings' | 'saveSettings' | 'blockRevision' | 'atomic' | 'tickets' | 'get'>
   readonly sources: SourceRegistry
+  /** Installed Feature kinds, which validate `feature:<id>` blocks and resolve the instances those blocks read and write. */
+  readonly features: FeatureRegistry
   /** Notified when a settings save changes the policy version. */
   readonly engine: EngineForSettings
   /** Health board where each source's policy sync reports under `sync:<id>`. */
@@ -124,13 +133,16 @@ export class Settings {
   }
   /**
    * Returns one settings block as accepted by `save` (`policy`, `eval`, `executor`, `pause` holding `{ paused }`, or
-   * `source:<id>` holding `{ enabled, config }`) along with its current block revision.
+   * `source:<id>` and `feature:<id>` holding `{ enabled, config }`) along with its current block revision.
    * @throws UserError (`unknownBlock`) when no such settings block exists.
    */
   block(block: string): { block: string; revision: number; value: unknown } {
-    const { store, sources } = this.host
-    const settings = store.settings(), id = block.startsWith('source:') ? block.slice('source:'.length) : undefined
-    const instance = id === undefined ? undefined : sources.instances(settings).find(item => item.id === id)
+    const { store, sources, features } = this.host
+    const settings = store.settings()
+    const [kind, id] = block.startsWith('source:') ? ['source', block.slice('source:'.length)]
+      : block.startsWith('feature:') ? ['feature', block.slice('feature:'.length)] : ['', undefined]
+    const instances = kind === 'source' ? sources.instances(settings) : kind === 'feature' ? features.instances(settings) : []
+    const instance = id === undefined ? undefined : instances.find(item => item.id === id)
     const value = block === 'pause' ? { paused: settings.paused } : block === 'policy' || block === 'eval' || block === 'executor' ? settings[block]
       : instance ? { enabled: instance.enabled, config: instance.config } : undefined
     if (value === undefined) throw new UserError('unknownBlock', { block })
@@ -146,15 +158,17 @@ export class Settings {
    * @throws UserError | z.ZodError when `block` is unknown, the source is not installed, `value` is invalid (such as an `executor` block carrying `paused`, which only `pause` sets), a non-panel `origin` changes panel-only fields, or a role-model or account check fails.
    */
   async save(block: SettingsBlock, value: unknown, revision: number, origin: SettingsOrigin) {
-    const { store, sources, engine, sessions } = this.host
+    const { store, sources, features, engine, sessions } = this.host
     const stale = () => revision !== store.blockRevision(block)
     if (stale()) throw new SettingsConflict('Settings changed. Reload before saving.')
-    const id = block.startsWith('source:') ? block.slice(7) : block
-    const kind = block.startsWith('source:') ? 'source' : block
+    const separator = block.indexOf(':')
+    const kind = separator < 0 ? block : block.slice(0, separator)
+    const id = separator < 0 ? block : block.slice(separator + 1)
     if (!(kind in BLOCKS)) throw new UserError('unknownBlock', { block })
     const rules = BLOCKS[kind as keyof typeof BLOCKS]
     if (kind === 'source' && !sources.kind(id)) throw new UserError('sourceNotInstalled', { source: id })
-    const parsed = rules.parse(value, sources, id)
+    if (kind === 'feature' && !features.kind(id)) throw new UserError('sourceNotInstalled', { source: id })
+    const parsed = rules.parse(value, sources, id, features)
     const current = store.settings()
     const candidate = rules.merge(current, parsed, id)
     const model = block === 'eval' ? candidate.eval.model : block === 'executor' ? candidate.executor.model : null

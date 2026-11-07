@@ -168,6 +168,17 @@ const TEXT = {
   'sourceState.setup': ['等待部署检查', 'Waiting for the deployment check'],
   setupFixLink: ['去修正', 'Fix it'],
   'openSettingsOf.deployment': ['去部署页修改', 'Change it on Deployment'],
+  // Issues
+  issuePanel: ['Issue 列表', 'Issues'],
+  issuesIntro: ['这个仓库的 Issue，按编号从新到旧；打开一条查看它的线程和已关联的工作。列表只包含轮询到的 Issue，未开启 Issue 轮询时为空。', 'This repository\'s Issues, newest number first; open one to see its Thread and the work attached to it. The list holds the Issues polling has seen, and is empty while Issue polling is off.'],
+  issuesNone: ['还没有收到这个仓库的 Issue。dsh-superagent 只列出轮询到的 Issue。', 'No Issues from this repository yet; dsh-superagent lists the Issues its polls have seen.'],
+  issuesNoRepository: ['还没有解析出仓库，因此没有 Issue 可列。在部署页填好仓库后，轮询到的 Issue 会出现在这里。', 'No repository is resolved, so there are no Issues to list. Set the repository on Deployment and the Issues its polls see appear here.'],
+  'issueState.open': ['打开', 'Open'],
+  'issueState.closed': ['已关闭', 'Closed'],
+  'issueState.unknown': ['状态未知', 'State unknown'],
+  issueStateUnknownHint: ['这条 Issue 在记录状态之前就已保存，dsh-superagent 还没有读到它的新状态。', 'This Issue was stored before its state was recorded; dsh-superagent has not read a newer state yet.'],
+  issueWork: ['已关联 {count} 项工作', '{count} attached'],
+  issueNoWork: ['无关联工作', 'Nothing attached'],
   // Trigger
   loadEarlier: ['加载更早的触发', 'Load earlier Triggers'],
   subscribedTickets: ['订阅此线程的工单', 'Tickets subscribed to this Thread'],

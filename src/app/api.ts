@@ -6,6 +6,7 @@ import type { HistoryView } from './settings-history.ts'
 import type { OverviewView } from './views/overview.ts'
 import type { SettingsView } from './views/settings.ts'
 import type { SourceStatusView } from './views/sources.ts'
+import type { IssueListView } from './views/issues.ts'
 import type { DecisionListView, SearchView, ThreadDetailView, ThreadListView } from './views/threads.ts'
 import type { TicketListView } from './views/tickets.ts'
 
@@ -24,6 +25,7 @@ export interface Api {
   'GET sources': { response: SourceStatusView[] }
   'GET settings': { response: SettingsView }
   'POST sources/:id/labels': { response: { added: string[] } }
+  'GET issues': { query?: Paged; response: IssueListView }
   'GET threads': { query?: Paged & { filter?: ThreadFilter }; response: ThreadListView }
   'GET threads/:key': { query?: { limit?: number; before?: string; around?: string }; response: ThreadDetailView }
   'POST threads/:key/unsubscribe': { response: { removed: boolean; thread: string; context_delivery: Delivery } }

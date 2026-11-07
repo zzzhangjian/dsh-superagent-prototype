@@ -230,7 +230,7 @@ async function readStream(ctx: SourceContext, round: Round, id: string, path: st
       const pr = issue.success && !!issue.data.pull_request
       if (!issue.success || !fresh(issue.data.created_at, pr ? 'pulls' : 'issues')) continue
       await ctx.receive(pr ? pullTrigger(issue.data, login) : issueTrigger(issue.data, login))
-      nameThread(ctx, issue.data.number, issue.data.title)
+      nameThread(ctx, issue.data.number, issue.data.title, issue.data.state)
       continue
     }
     const number = Number(/\/(?:issues|pulls)\/(\d+)$/.exec((id === 'comments' ? item.issue_url : item.pull_request_url) ?? '')?.[1])
@@ -355,7 +355,7 @@ async function readNotified(ctx: SourceContext, round: Round, number: number, it
       const opened = Date.parse(issue.created_at) >= Date.parse(since) && !sameName(issue.user.login, login)
       if (opened) await ctx.receive(issueTrigger(issue, login))
       await intakeComments(ctx, { number, isPr: false, url: issue.html_url }, since, round)
-      nameThread(ctx, number, issue.title)
+      nameThread(ctx, number, issue.title, issue.state)
     }
   }
   if (isPr) {
@@ -422,8 +422,9 @@ async function pollChecks(ctx: SourceContext, round: Round, number: number, pr: 
   ctx.state.set(KV.github.ci(number), { fingerprint, revision })
   ctx.threads.describe(`github:${number}`, { facts: { ci: ciFact(ciCounts(snapshot)) } })
 }
-function nameThread(ctx: SourceContext, number: number, title: string): void {
-  ctx.threads.patch(`github:${number}`, { title })
+function nameThread(ctx: SourceContext, number: number, title: string, state?: string): void {
+  // The Issue's open/closed state is not otherwise stored; the panel's Issue list reads it from here.
+  ctx.threads.patch(`github:${number}`, { title, ...state ? { state } : {} })
   ctx.threads.describe(`github:${number}`, { label: `#${number} ${title}`, facts: { number: { value: `#${number}` } } })
 }
 /** Polls subscribed Issue and PR Threads not already read in this round; a deleted (410) Issue is still polled within the horizon (costing one read) and does not fail the round. */
@@ -446,7 +447,7 @@ async function pollThread(ctx: SourceContext, round: Round, thread: Thread): Pro
   if (typeof thread.meta.isPr !== 'boolean' || typeof thread.meta.title !== 'string') {
     const issue = await ctx.commands.withSignal(round.signal).api(IssueSchema, `issues/${number}`)
     ctx.threads.patch(thread.key, { number, isPr: !!issue.pull_request, url: issue.html_url })
-    if (issue.title) nameThread(ctx, number, issue.title)
+    if (issue.title) nameThread(ctx, number, issue.title, issue.state)
     thread = ctx.threads.get(thread.key) ?? thread
   }
   const checkpoint = KV.github.cursor(number)

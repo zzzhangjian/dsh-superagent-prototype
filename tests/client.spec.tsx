@@ -26,7 +26,10 @@ function fixture(listed: string[]) {
   }
   apply(ctx as never)
   const entry = (name: string) => entries.find(item => item.options.name === name)!
-  return { ctx, entries, dictionaries, main: entry('main'), nav: entry('sidebar.panellist') }
+  const keyed = (key: string) => entries.find(item => item.options.key === key)!
+  const byId = (id: string) => entries.find(item => item.options.id === id)!
+  return { ctx, entries, dictionaries, main: entry('main'), nav: entry('sidebar.panellist'),
+    issues: keyed('dsh-superagent-issues'), issuesNav: byId('dsh-superagent-issues') }
 }
 async function render(entry: Entry, props: Record<string, unknown>) {
   const container = document.createElement('div'); document.body.append(container)
@@ -49,14 +52,18 @@ const serve = () => vi.stubGlobal('fetch', vi.fn(async (url: string) => {
 }))
 afterEach(() => { vi.unstubAllGlobals() })
 
-it('registers a localized main panel, sidebar entry and Plugin Manager row page, and no settings section', () => {
-  const { entries, dictionaries, main, nav } = fixture([])
-  expect(entries.map(entry => entry.options.name)).toEqual(['main', 'sidebar.panellist', 'plugins.row.config'])
-  expect(entries[2]!.options).toMatchObject({ key: 'dsh-superagent#dsh-superagent', locale: 'dshSuperagent' })
+it('registers localized main panels, sidebar entries and a Plugin Manager row page, and no settings section', () => {
+  const { entries, dictionaries, main, nav, issues, issuesNav } = fixture([])
+  expect(entries.map(entry => entry.options.name)).toEqual(['main', 'main', 'sidebar.panellist', 'sidebar.panellist', 'plugins.row.config'])
+  expect(entries[4]!.options).toMatchObject({ key: 'dsh-superagent#dsh-superagent', locale: 'dshSuperagent' })
   expect(Object.keys(dictionaries)).toEqual(['dshSuperagent'])
   expect(main.options).toMatchObject({ key: 'dsh-superagent', locale: 'dshSuperagent' })
   expect(nav.options).toMatchObject({ id: 'dsh-superagent', order: 10, locale: 'dshSuperagent' })
   expect(nav.options.label?.()).toBe('Superagent')
+  // The Issue list is a second main panel with its own sidebar entry, ordered after the management panel's.
+  expect(issues.options).toMatchObject({ key: 'dsh-superagent-issues', locale: 'dshSuperagent' })
+  expect(issuesNav.options).toMatchObject({ id: 'dsh-superagent-issues', order: 20, locale: 'dshSuperagent' })
+  expect(issuesNav.options.label?.()).toBe('Issue 列表')
 })
 
 it('opens a listed Session through the workspace from the main panel', async () => {

@@ -31,6 +31,12 @@ A human follow-up still owned by an Executor is marked **Delivered to Ticket**, 
 
 Ticket details show the originating Trigger, Decision and reason, scope and Policy version. Assignments and secondary details are folded below the immediate actions. **Retry** is available for failed Input delivery or a Ticket waiting for a person after a blocked or failed Report. Ended Tickets show outcomes such as **Pull request merged** or **Stopped by a person**.
 
+## Issues
+
+A second sidebar entry, **Issues** (Issue 列表), opens the watched repository's GitHub Issues instead of the management panel. It lists one row per Issue dsh-superagent's polls have seen, newest number first, with its number, title, state (**Open**, **Closed**, or **State unknown** for an Issue stored before its state was recorded), how much work is attached to it, and a link to the Issue on GitHub.
+
+Clicking a row opens that Issue's Thread page — the same page the Trigger tab shows — without leaving the Issues panel; its back button returns to the list. The list is built from stored Threads, so an Issue appears once polling has read it, and it is empty while Issue polling is off. When no repository is resolved the panel says so and points at Deployment rather than showing an empty list.
+
 ## Settings groups
 
 - **Sources:** one card per Source with its switch, fields and verified account facts. GitHub also offers receive-all switches for new Issues, pull requests, comments and default-branch CI. Polling and read limits are under Advanced.

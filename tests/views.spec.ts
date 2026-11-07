@@ -10,6 +10,7 @@ import { githubKind } from '../src/sources/github.ts'
 import { snapshot, threadSummary, ticketSummary, triggerView } from '../src/app/views/records.ts'
 import { basisFacts, ticketDetail } from '../src/app/views/tickets.ts'
 import { threadDetail } from '../src/app/views/threads.ts'
+import { issueList } from '../src/app/views/issues.ts'
 import { droppedReplies, sourcesStatus } from '../src/app/views/sources.ts'
 import { overview } from '../src/app/views/overview.ts'
 import { markdown, plain } from '../src/app/views/text.ts'
@@ -318,4 +319,28 @@ it('reads each ticket a page\'s follow-ups reached once, and nothing for a messa
   const records = { tickets: { get: vi.fn() }, threads: { get: vi.fn() }, triggers: store.triggers }
   expect(followupOwners(store.triggers.get('f3')!, records)).toEqual([])
   expect([records.tickets.get, records.threads.get].map(read => read.mock.calls.length)).toEqual([0, 0])
+})
+
+it('lists the watched repository\'s Issues newest number first, without pull requests, CI threads, or other sources', () => {
+  const host = views()
+  const thread = (key: string, ref: string, meta: Record<string, unknown>, fields: Partial<Parameters<typeof store.threads.save>[0]> = {}) =>
+    store.threads.save({ key, ref: { source: 'github', id: ref }, createdAt: at, subscriptions: [], correlated: [], pending: [], meta, ...fields })
+  thread('github:12', '12', { title: 'Login fails', state: 'open', url: 'https://github.com/acme/widgets/issues/12' })
+  thread('github:9', '9', { title: 'Slow start', state: 'closed' }, { subscriptions: ['t1'], context: ['t2'] })
+  // No state stored yet: a Thread described before this record existed must read as unknown, not as open.
+  thread('github:7', '7', { label: '#7 Old import' })
+  // Not Issues: a pull request, a CI thread, and another source's thread.
+  thread('github:5', '5', { title: 'Fix copy', state: 'open', isPr: true })
+  thread('github:ci:5', 'ci:5', { title: 'CI of PR #5', state: 'open' })
+  store.threads.save({ key: 'feishu:oc_1:om_root', ref: { source: 'feishu', id: 'oc_1:om_root' }, createdAt: at, subscriptions: [],
+    correlated: [], pending: [], meta: { title: '团队群' } })
+  const list = issueList(host, 'acme/widgets', 0, 20)
+  expect(list.items.map(item => [item.number, item.title, item.state, item.work])).toEqual([
+    [12, 'Login fails', 'open', 0], [9, 'Slow start', 'closed', 2], [7, 'Old import', 'unknown', 0]])
+  expect(list).toMatchObject({ repository: 'acme/widgets', total: 3, next_offset: null })
+  expect(list.items[0]!.url).toBe('https://github.com/acme/widgets/issues/12')
+  // While setup has resolved no repository the list still answers, so the panel can name that empty state instead.
+  expect(issueList(host, undefined, 0, 20)).not.toHaveProperty('repository')
+  // Pages cut the list rather than a filtered prefix of it.
+  expect(issueList(host, 'acme/widgets', 1, 1)).toMatchObject({ items: [{ key: 'github:9' }], next_offset: 2, total: 3 })
 })

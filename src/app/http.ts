@@ -22,6 +22,7 @@ import type { TextCache } from './cache.ts'
 import type { LinkTarget, ViewHost } from './views/records.ts'
 import type { Variable } from './execution-environment.ts'
 import { policyHistory } from './settings-history.ts'
+import { issueList } from './views/issues.ts'
 import { overview } from './views/overview.ts'
 import { settingsView } from './views/settings.ts'
 import { sourcesStatus, type SetupState } from './views/sources.ts'
@@ -139,6 +140,7 @@ const offset = z.coerce.number().int().nonnegative().catch(0)
 const limit = (fallback: number, max: number) => z.coerce.number().int().positive().catch(fallback).transform(value => Math.min(max, value))
 const TicketsQuery = z.object({ state: z.enum(TICKET_FILTERS).catch('open'), offset, limit: limit(20, 1000) })
 const ThreadsQuery = z.object({ filter: z.enum(THREAD_FILTERS).catch('subscribed'), offset, limit: limit(20, 1000) })
+const IssuesQuery = z.object({ offset, limit: limit(20, 1000) })
 const ThreadQuery = z.object({ limit: limit(50, 100), before: z.string().optional(), around: z.string().optional() })
 const DecisionsQuery = z.object({ kind: z.string().default(''), window: z.literal('24h').optional().catch(undefined), offset,
   limit: limit(30, 200) })
@@ -160,6 +162,11 @@ function routes(runtime: HttpHost): Routes {
     'GET sources': () => sourcesStatus(views(runtime), runtime.health, setupState(runtime)),
     'GET settings': () => settingsView(store, runtime.sources, runtime.health, setupState(runtime), runtime.machine.stateDir),
     'POST sources/:id/labels': ({ params }) => runtime.settings.refreshLabels(params.id),
+    'GET issues': ({ query }) => {
+      const { offset, limit } = IssuesQuery.parse(query)
+      // The repository names which empty state the list shows; it is unresolved while setup is still waiting.
+      return issueList(views(runtime), runtime.configured() ? runtime.deployment.repository : undefined, offset, limit)
+    },
     'GET threads': ({ query }) => {
       const { filter, offset, limit } = ThreadsQuery.parse(query)
       return threadList(views(runtime), filter, offset, limit)

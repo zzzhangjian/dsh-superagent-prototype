@@ -4,6 +4,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { expect, vi } from 'vitest'
 import { App } from '../../src/client/app.tsx'
 import { usePageForm } from '../../src/client/deployment.tsx'
+import { IssuesApp } from '../../src/client/issues.tsx'
 import { zh } from '../../src/client/locales.ts'
 import type { T } from '../../src/client/text.ts'
 import { server, usePanelServer } from './panel-server.ts'
@@ -17,6 +18,10 @@ export const translator = (dictionary: Record<string, string>): T => ((key: stri
 }) as T
 function Panel({ t }: { t: T }) {
   return <App t={t} openSession={async id => { server.opened.push(id) }} deploymentForm={usePageForm(server.form)} />
+}
+/** The Issue sidebar panel as its own main panel renders it: the list, or the Thread a row opened. */
+function Issues({ t }: { t: T }) {
+  return <IssuesApp t={t} openSession={async id => { server.opened.push(id) }} />
 }
 let root: Root | undefined
 let container: HTMLElement | undefined
@@ -41,6 +46,14 @@ export async function mount(dictionary: Record<string, string> = zh) {
   await act(async () => { root!.render(<Panel t={translator(dictionary)} />) })
   await settle()
 }
+/** Mount the Issue panel in place of the management panel, with the same fake server and interactions. */
+export async function mountIssues(dictionary: Record<string, string> = zh) {
+  container = document.createElement('div'); document.body.append(container)
+  root = createRoot(container)
+  await act(async () => { root!.render(<Issues t={translator(dictionary)} />) })
+  await settle()
+}
+export async function remountIssues(dictionary: Record<string, string> = zh) { unmount(); await mountIssues(dictionary) }
 export async function remount(dictionary: Record<string, string> = zh) { unmount(); await mount(dictionary) }
 
 export const all = (selector: string) => [...document.querySelectorAll<HTMLElement>(selector)]
